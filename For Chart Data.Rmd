@@ -1,0 +1,54 @@
+---
+title: "Chart Data"
+author: "William E. Dean"
+date: "March 10, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## For Chart
+```{r}
+get_solution(result, Q)
+get_solution(result, DV[i,j])
+chart1 <- get_solution(result, DV[i,j])
+TDY <- (chart1[,2])
+INST <- (chart1[,3])
+GO <- (chart1[,4])
+TDYNum <- (TDY*GO)
+InstructorNum <- (INST*GO)
+cbind(TDYNum,InstructorNum)
+chart2 <- cbind(TDYNum,InstructorNum)
+plot(chart2)
+```
+
+
+## For Cost and TDY/INST
+```{r}
+get_solution(result, DV[i,j]) 
+chart1 <- get_solution(result, DV[i,j])
+TDY <- (chart1[,2])
+INST <- (chart1[,3])
+GO <- (chart1[,4])
+Cost <- (RawTripData[,3])
+cbind(GO,Cost)
+dd = data.frame(cbind(GO,Cost))
+##Each row and determine if a value is zero
+row_sub = apply(dd, 1, function(row) all(row !=0 )) ##remove 0s
+dd[row_sub,]
+Totals<-(dd[row_sub,])
+sapply(Totals, function(x) sum(as.numeric(as.character(x)), na.rm = TRUE))
+pander(sapply(Totals, function(x) sum(as.numeric(as.character(x)), na.rm = TRUE)), 
+       caption="Totals")
+plot(Totals)
+cbind(TDY,INST,GO)
+de = data.frame(cbind(TDY,INST,GO))
+##Each row and determine if a value is zero
+row_sub = apply(de, 1, function(row) all(row !=0 ))##remove 0s
+de[row_sub,]
+Whogoes<-(de[row_sub,])
+plot(Whogoes)
+pander(Whogoes, 
+       caption="TDY/INST")
+```
