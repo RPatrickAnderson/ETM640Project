@@ -1,0 +1,174 @@
+---
+title: "Untitled"
+author: "Ryan Marshall"
+date: "March 10, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+$$
+\begin{split}
+\begin{aligned}
+\text {Goal Constraints}\\
+\ C_i: & \text { TDY cost per person}\\
+\ DV_{i,j}: & \text {Decision variable to send jth instructor on ith trip}\\
+\ BD^-: & \text { Amount squadron under Professional Develpment Budget}\\
+\ BD^+: & \text { Amount squadron over Professional Develpment Budget}\\
+\ TT: & \text { Professional Development Trip Target Budget}\\
+\end{aligned}
+\end{split}
+$$
+
+$$
+\begin{split}
+\begin{aligned}
+\text {subject to} & \sum_{i} \sum_{j} C_{i} * DV_{i,j} + BD^- - BD^+ = TT\\
+\end{aligned}
+\end{split}
+$$
+
+$$
+\begin{split}
+\begin{aligned}
+\text {Instructor Improvement}\\
+\ S_j: & \text { Active or Inactive Status of jth instructor}\\
+\ DV_{i,j}: & \text {Decision variable to send jth instructor on ith trip}\\
+\ ID^-: & \text { Amount squadron under Active Instructors Target}\\
+\ ID^+: & \text { Amount squadron over Active Instructors Target}\\
+\ AT: & \text { Active Instructors Target}\\
+\end{aligned}
+\end{split}
+$$
+
+$$
+\begin{split}
+\begin{aligned}
+\text {subject to} & \sum_{i} \sum_{j} S_{j} * DV_{i,j} + ID^- - ID^+ = AT\\
+\end{aligned}
+\end{split}
+$$
+
+$$
+\begin{split}
+\begin{aligned}
+\text {Minimum Trips}\\
+\ DV_{i,j}: & \text {Decision variable to send jth instructor on ith trip}\\
+\ TD^-_j: & \text { Amount squadron under Minimum trips}\\
+\ TD^+_j: & \text { Amount squadron over Minimum trips}\\
+\ MinT: & \text { Miniumum trip target for all j instructors}\\
+\end{aligned}
+\end{split}
+$$
+
+$$
+\begin{split}
+\begin{aligned}
+\text {subject to} & \sum_{i} DV_{i,j} + TD^-_j - TD^+_j = MinT\\
+\end{aligned}
+\end{split}
+$$
+
+$$
+\begin{split}
+\begin{aligned}
+\text {Maximum Trips}\\
+\ DV_{i,j}: & \text {Decision variable to send jth instructor on ith trip}\\
+\ XD^-_j: & \text { Amount squadron under Maximum trips}\\
+\ XD^+_j: & \text { Amount squadron over Maximum trips}\\
+\ MaxT: & \text { Maximum trip target for all j instructors}\\
+\end{aligned}
+\end{split}
+$$
+
+$$
+\begin{split}
+\begin{aligned}
+\text {subject to} & \sum_{i} DV_{i,j} + XD^-_j - XD^+_j = MaxT\\
+\end{aligned}
+\end{split}
+$$
+
+$$
+\begin{split}
+\begin{aligned}
+\text {Merit Goal}\\
+\ IM_{j}: & \text {Instructor Merit}\\
+\ TM_{i}: & \text { Trip Merit Status}\\
+\ DV_{i,j}: & \text {Decision variable to send jth instructor on ith trip}\\
+\ MD^-_j: & \text { Amount squadron under merit trips for j instructors}\\
+\ MD^+_j: & \text { Amount squadron over merit tripts for j instructors}\\
+\ TIMT: & \text { Target number of instructors to send on merit trips}\\
+\end{aligned}
+\end{split}
+$$
+
+$$
+\begin{split}
+\begin{aligned}
+\text {subject to} & \sum_{i} \sum_{j} IM_{j} * TM_{j} * DV_{i,j} + MD^- - MD^+ = TIMT\\
+\end{aligned}
+\end{split}
+$$
+
+
+$$
+\begin{split}
+\begin{aligned}
+\text {Hard Budget Constraints}\\
+\ TB: & \text { Total Travel Budget}\\
+\ TC: & \text { Mission Related Travel Costs}\\
+\end{aligned}
+\end{split}
+$$
+
+$$
+\begin{split}
+\begin{aligned}
+\text {subject to} & \sum_{i} \sum_{j}  C_{i} * DV_{i,j} \leq TB - TC\\
+\end{aligned}
+\end{split}
+$$
+
+$$
+\begin{split}
+\begin{aligned}
+\text {Slots open for trip}\\
+\ ISA_{i}: & \text { Instructor Slots Available}\\
+\end{aligned}
+\end{split}
+$$
+
+$$
+\begin{split}
+\begin{aligned}
+\text {subject to} & \sum_{j} DV_{i,j} \leq ISA_{i}\\
+\end{aligned}
+\end{split}
+$$
+
+$$
+\begin{split}
+\begin{aligned}
+\text{subject to } \; & \frac{w_1* BD^- + BD^+}{TT} \leq Q\\
+\text{}\\
+\text{            } \; & \frac{w_2* ID^- + ID^+}{AT} \leq Q\\
+\text{}\\
+\text{        } \; & \frac{w_3* TD^-_j + TD^+_j}{MinT} \leq Q\\
+\text{}\\
+\text{        } \; & \frac{w_4* XD^-_j + XD^+_j}{MaxT} \leq Q\\
+\text{}\\
+\text{        } \; & \frac{w_5* MD^- + MD^+}{TIMT} \leq Q\\
+\end{aligned}
+\end{split}
+$$
+
+
+
+
+
+
