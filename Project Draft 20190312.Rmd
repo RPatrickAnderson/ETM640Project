@@ -1,0 +1,320 @@
+---
+title: "ETM640ProjectDraft"
+author: "Randolph Anderson"
+date: "March 4, 2019"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+The 532d Training Squadron (532 TRS) is a unit in the United States Air Force (USAF).  The 532 TRS
+trains the nation's intercontinental ballistic missile (ICBM) operators. The unit also trains
+maintenance forces for ICBM and air launched cruise missile (ALCM) systems. 532 TRS instructors
+receive professional development (ProD) to increase their knowledge of nuclear enterprise.  
+Professional development involves sending one or more nstructors on a trip to a nuclear facility 
+in the United States.While on their trip, instructors receive tours and briefings from onsite personnel.
+One purpose of providing professional development is to increase effectiveness of instructors. Instructors
+can help motivate students by illuminating the importance of what students are learning.  However,
+instructors also perform jobs that do not involve actively teaching students.  When in these other
+jobs instructors are not in the best position to integrate what they learned into their instruction.
+
+## Problem Definition
+Some instructors do not receive professional development until most of their instructing time is
+over.  As a result, they never get a chance to share what they have learned with the students.
+Since the goal of ProD is, in part, to increase the effectiveness of instructors, the unit may be
+able to do a better job assigning instructors to professional development trip in a way that
+balances several objectives (goals).
+
+## Objectives/Goals
+The squadron has several objectives for the professional development program.  Objectives
+include:
+
+1. (Budget) ProD budget should fully utilize remaining travel funds after all mission required
+trips are funded; ProD Budget = Total Budget - Mission Required Trips Costs.
+
+2. (Improve Instruction) ProD should help instructors be more effective teaching.
+
+3. (Fair development of instructor core) Each instructor is to be given the opportunity to go on at 
+least one ProD trip per year and there should a limit on the max number of trips a person goes on.
+
+4. (Merit):  Instructors merit is considered when assigning instructors to ProD opportunities
+that are tagged as being a "glory trip".  A glory trip is does something that is extra special.
+The idea is to reward high performing instructors with a special trip.
+
+## Goal Programming Model
+Goal programming is an optimization techniques to solve problems with multiple objectives.  
+Additionally, Goal programming allows for flexibility in meeting constraints by allowing constraints
+to be deviated/broken in order to balance multiple goals.  The model will determine which instructor to 
+send on which ProD trip for each quarter (3 month period). Goal programming models can be formulated
+in many different ways. For example, some models might aim to minimized the sum of deviations from the goal 
+targets, while other models, may be set up to minimize the largest deviation (minimax model). This 
+project will use a version of the minimax model. A weighted percentage based minimax model is selected for the 
+following reasons and assumptions. It is assumed that harm from deviations may increase rapidly such
+that it may not be advantage to allow one goal to float to far from target. For example, if objective 3 was 
+allowed to deviate it could create harmful perceptions of unfairness. The percentage based minimax
+model was selected because harm of deviation was assumed to be more closely related to percentage deviation
+then nominal deviation. Weights were applied because squadron leadership has communicated that a loose
+prioritization between the goals. Weights will allow the model to capture these priorities into 
+the results.
+
+##Decision Variables
+There are j instructors and i ProD trips. The model aims to determine which instructors to send on which trip. For each instructor a decision is made to either send or don't send for each trip. To capture all this decisions a discison matrix is defined. $DV[i,j]$ captures the decision for each instructor trip combination. Each element of the matrix is either a 0 or a 1. A 0 indicates that the jth instructor was not assigned to the ith trip. While a 1 indicates that the jth intructor is assigned to the ith trip. For example, DV[1,2]=1 indicates the decision to send instructor 2 to Pro-D trip 1. While DV[12,34] =0 indicates that the 34th instructor is not assigned to 12th trip.
+
+## Objective 
+Min: Q, Where Q is less than or equal to the weighted ratio of goal related deviations (e.g Q <= (weight)*Deviation/GoalTarget)
+
+```{r}
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library (magrittr, quietly = TRUE))     #Used for pipes/dplyr
+suppressPackageStartupMessages(library (pander, quietly = TRUE))       # for nicely formated tables
+suppressPackageStartupMessages(library(dplyr, quietly=TRUE))           # For data structure manipulation
+suppressPackageStartupMessages(library(ROI, quietly=TRUE))             # R Optimization Interface package
+suppressPackageStartupMessages(library(ROI.plugin.glpk, quietly=TRUE)) # Connection to glpk as solver
+suppressPackageStartupMessages(library(ompr, quietly=TRUE))            # Optimization Modeling using R
+suppressPackageStartupMessages(library(ompr.roi, quietly=TRUE))        # Connective tissue
+suppressPackageStartupMessages(library(tidyr))
+```
+
+## Data Input
+```{r Instructor Data}
+# reads in the instructor data from a csv file.
+RawInstructorData <- as.matrix(read.table(file="InstructorData.csv", row.names=1,sep=","))
+colnames(RawInstructorData) <- c("Instructor","DAID", "4QHrs", "Top Performer","Active/Inactive")
+RawInstructorData
+```
+
+```{r Trip Data}
+# reads in the instructor data from a csv file.
+RawTripData <- as.matrix(read.table(file="C:/Users/rpatr/Documents/ProDTripData.csv", row.names=1,sep=","))
+colnames(RawTripData) <- c("Trip Name","MeritBased", "Cost/Instr", "instrSlotsAvailable","NumberOfDays","TotalCost")
+RawTripData
+```
+
+```{r}
+TotalTravelBudget <- 188000 #budget for all unit funded travel. This is a hard limit. 
+MissionTravelCosts <- 0 #(ssumes no mission related trips accomplished prior to model being run. 
+ForcastedMissionTravelCosts <- 105000 #current mission related travel forcasted by resource advisor
+ProDTravelCosts <- 0  #(assumes no ProD trips accomplished prior to model being run.
+TotalRemainingTravelBudget <- 188000-MissionTravelCosts-ProDTravelCosts
+ProDTripBudgetTarget <- .9*(TotalTravelBudget-ForcastedMissionTravelCosts) # Target is to use 90% of open funds
+NumOfTrips <- length(RawTripData[,1])
+NumOfInstructors <- length(RawInstructorData[,1])
+TDYCostPerPerson <- as.numeric(RawTripData[,3])
+InstructorStatus <- as.numeric(RawInstructorData[,5])
+InstructorMerit <-  as.numeric(RawInstructorData[,4])
+TripMeritStatus <-  as.numeric(RawTripData[,2])
+InstrSlotsAvailable <- as.numeric(RawTripData[,4])
+NumOfTripsSlotsAvailable <- sum(InstrSlotsAvailable)
+
+TotalNumOfActiveInstructors<-tabulate(as.numeric(RawInstructorData[,5]),nbins = 1)
+
+#Target for the number of active instructors to send on Trips. 
+TotalNumOfProDTripsForActiveInstructorsTarget<-TotalNumOfActiveInstructors*(floor(NumOfTripsSlotsAvailable/NumOfInstructors))+min((NumOfTripsSlotsAvailable%%NumOfInstructors),TotalNumOfActiveInstructors)
+
+#Calc the TargetNumOfInstructorsToSendOnMeritTrips
+NumOfMeritTripsSlotsAvailable <- TripMeritStatus %*% InstrSlotsAvailable
+NumOfInstructorsWithMeritStatus <- tabulate(as.numeric(RawInstructorData[,4]),nbins = 1)
+TargetNumOfInstructorsToSendOnMeritTrips <- min(NumOfInstructorsWithMeritStatus,NumOfMeritTripsSlotsAvailable)
+MinNumOfMeritTripsPerTopPerformer <- floor(NumOfMeritTripsSlotsAvailable/NumOfInstructorsWithMeritStatus)
+MiniumTripsTarget <- floor(NumOfTripsSlotsAvailable/NumOfInstructors)
+MaxTripsTarget <- ceiling(NumOfTripsSlotsAvailable/NumOfInstructors)
+
+Weights <- as.matrix(c(1,1,1,1,1))
+```
+
+## Goal Programming Code
+```{r MIP Code}
+
+model <- MIPModel() %>%
+  
+  # VARIABLES
+  add_variable (DV[i, j], i=1:NumOfTrips, j=1:NumOfInstructors, type="binary") %>%
+  add_variable(BDminus, type = "continuous", lb = 0) %>%
+  add_variable(BDpostive, type = "continuous", lb = 0) %>%
+  add_variable(IDminus, type = "integer", lb = 0) %>%
+  add_variable(IDpostive, type = "integer", lb = 0) %>%
+  add_variable(TDminus[j], j=1:NumOfInstructors, type="integer", lb=0) %>%
+  add_variable(TDpostive[j], j=1:NumOfInstructors, type="integer", lb=0) %>%
+  add_variable(MDminus, type = "integer", lb = 0) %>%
+  add_variable(MDpostive, type = "integer", lb = 0) %>%
+  
+  # OBJECTIVE
+  #Minimize the weighted sum of deviations
+  set_objective(Weights[1]*(BDminus + BDpostive) + Weights[2]*IDminus +
+                  sum_expr(Weights[3]*TDminus[j]+Weights[4]*TDpostive[j], j=1:NumOfInstructors)+Weights[5]*MDminus, "min") %>%
+  
+  # GOAL CONSTRAINTS
+  # 1. ProD Trip Budget Goal
+  add_constraint(sum_expr(TDYCostPerPerson[i]*DV[i,j],i=1:NumOfTrips, j=1:NumOfInstructors)
+                 + BDminus - BDpostive == ProDTripBudgetTarget)%>%
+  
+  # 2. Improve instruction Goal
+  add_constraint(sum_expr(InstructorStatus[j]*DV[i,j],i=1:NumOfTrips, j=1:NumOfInstructors) + IDminus - IDpostive
+                 == TotalNumOfProDTripsForActiveInstructorsTarget)%>%
+
+  # 3. Fairly Develop Instructors: Max Trips
+  add_constraint(sum_expr(DV[i,j],i=1:NumOfTrips)-TDpostive[j] <= MaxTripsTarget, j=1:NumOfInstructors)%>%
+
+  # 4. Fairly Develop Instructors: Minimum Trips
+  add_constraint(sum_expr(DV[i,j],i=1:NumOfTrips)+TDminus[j] >= MiniumTripsTarget, j=1:NumOfInstructors)%>%
+
+  # 5. Instructor Merit
+  add_constraint(sum_expr(InstructorMerit[j]*TripMeritStatus[i]*DV[i,j],i=1:NumOfTrips,j=1:NumOfInstructors) + MDminus -MDpostive  == TargetNumOfInstructorsToSendOnMeritTrips)%>%
+
+  
+  # # HARD CONSTRAINTS
+  #1. Instructor Merit (if spots are avialble each Top performer will go on a min number of available merit trips)
+  add_constraint(sum_expr(InstructorMerit[j]*TripMeritStatus[i]*DV[i,j],i=1:NumOfTrips)
+                 >= InstructorMerit[j]*MinNumOfMeritTripsPerTopPerformer,j=1:NumOfInstructors)%>%
+  
+  # 1. Budget Constraint
+  add_constraint(sum_expr(TDYCostPerPerson[i]*DV[i,j],i=1:NumOfTrips, j=1:NumOfInstructors) 
+                 <= TotalRemainingTravelBudget)%>%
+  
+  # 2. Slots Open for Trip
+  add_constraint(sum_expr(DV[i,j], j=1:NumOfInstructors) <= InstrSlotsAvailable[i], i=1:NumOfTrips)
+  
+result <- solve_model(model, with_ROI(solver = "glpk", verbose = TRUE))
+```
+
+```{r}
+
+# Active assignments (A) of each jth instructor to ith trips.
+A <- result %>% 
+  get_solution(DV[i,j]) %>%
+  filter(value == 1) %>%  
+  select(i, j)
+
+# Text name of the ith trip
+TDYNames <- RawTripData[,1]
+
+# Total Num of instructors going on the ith trip
+NumAssignedToEachTDY <- tabulate(as.numeric(A[,1]),nbins = NumOfTrips)
+
+# Total Num of top performers going on the ith trip
+NumOfTopPerformersAssignedToEachTDY <- matrix(rep(0, each=NumOfTrips), ncol=1)
+
+# Manual counting of all the top performers for each trip.
+for(i in 1:nrow(A))
+{
+  if(A[i,2]*InstructorMerit[A[i,2]] >= 1)
+  {
+    NumOfTopPerformersAssignedToEachTDY[A[i,1]] = NumOfTopPerformersAssignedToEachTDY[A[i,1]] + 1
+  }
+}
+
+#TripSummary (TDYName, #Assigned, Capacity, MeritTrip? AssignedOnMerit  Cost/Person)
+TripSummaryChart <- cbind(TDYNames,NumAssignedToEachTDY,InstrSlotsAvailable,
+                          NumOfTopPerformersAssignedToEachTDY,TripMeritStatus,TDYCostPerPerson) 
+colnames(TripSummaryChart)<-list("Names", "Total", "Cap",
+                                 "NumOfTPs", "GloryTrip?", "Cost/Per")
+
+# Total Num of instructors going on the ith trip
+NumTripsAssignedToEachInstructor <- tabulate(as.numeric(A[,2]),nbins = NumOfInstructors)
+
+# Blank vector to be build up 
+NumOfMeritTripsForEachInstructor<- matrix(rep(0, each=NumOfInstructors), ncol=1)
+
+# Of the trips each instructor went on how many trips had merit based classification?
+for(t in 1:nrow(A))
+{
+  if(A[t,1]*TripMeritStatus[A[t,1]] >= 1)
+  {
+    NumOfMeritTripsForEachInstructor[A[t,2]] = NumOfMeritTripsForEachInstructor[A[t,2]] + 1
+  }
+}
+
+# The first 3 trips assigned to each instructor
+AssignmentByInstructorMatrix <- matrix(rep(0, each=NumOfInstructors*3), ncol=3) #blank matrix to be built
+
+ #Count which trips each instructor went on to a max of 3 trips.
+for(k in 1:nrow(A))
+{
+  # if the first and second slot are filled then use the thrid slot, unless already filled
+  if ((AssignmentByInstructorMatrix[A[k,2],3] == 0) && (AssignmentByInstructorMatrix[A[k,2],2] != 0) && (AssignmentByInstructorMatrix[A[k,2],1] != 0))
+  {
+    AssignmentByInstructorMatrix[A[k,2],3] = A[k,1]
+  }
+    #if first slot is filled then use the second slot, unless already filled
+  if((AssignmentByInstructorMatrix[A[k,2],2] == 0) && (AssignmentByInstructorMatrix[A[k,2],1] != 0))
+  {
+    AssignmentByInstructorMatrix[A[k,2],2] = A[k,1]
+    }
+    #if first trip slot isn't filled then record trip, otherwise use next slot
+  if(AssignmentByInstructorMatrix[A[k,2],1] == 0)
+  {
+    AssignmentByInstructorMatrix[A[k,2],1] = A[k,1]
+     }
+ }
+
+InstructorNumber <- matrix(c(1:NumOfInstructors),ncol=1)
+ 
+# InstructorChart (TotalTrips, MeritTrips, Active?, MeritStatus, Trip1, Trip2, Trip3)
+InstructorChart <- cbind(InstructorNumber,NumTripsAssignedToEachInstructor,NumOfMeritTripsForEachInstructor,
+                         InstructorMerit,InstructorStatus,AssignmentByInstructorMatrix)
+colnames(InstructorChart)<-list("Instructor","TotalTrips", "MeritTrips","MeritStatus","Active?", "Trip1", "Trip2", "Trip3")
+
+
+# Goal Charts ()
+MaxWeightedPercentDeviation <- objective_value(result)
+# Goal Charts (Goal,MinusDev, PostiveDev)
+
+# Deviation Results Extacted
+BDminusResult <- get_solution(result, BDminus)
+BDpostiveResult <-get_solution(result, BDpostive)
+IDminusResult <- get_solution(result, IDminus)
+IDpostiveResult <- get_solution(result, IDpostive)
+MDminusResult <- get_solution(result, MDminus)
+MDpostiveResult <- get_solution(result, MDpostive)
+
+# GoalResults
+TotalSpent <- ProDTripBudgetTarget - BDminusResult + BDpostiveResult
+TotalNumOfProDTripsForActiveInstructors <- TotalNumOfProDTripsForActiveInstructorsTarget - IDminusResult + IDpostiveResult
+NumOfTPsSendOnMeritTrips <- TargetNumOfInstructorsToSendOnMeritTrips - MDminusResult + MDpostiveResult
+
+# GoalDataVectors
+G1 <- matrix(c(TotalSpent,ProDTripBudgetTarget,BDminusResult,BDpostiveResult),nrow=1)
+G2 <- matrix(c(TotalNumOfProDTripsForActiveInstructors,
+               TotalNumOfProDTripsForActiveInstructorsTarget,IDminusResult,IDpostiveResult),nrow=1)
+G3 <- matrix(c("SeeIntrChart",MiniumTripsTarget,"SeeIntrChart","SeeIntrChart"),nrow=1)
+G4 <- matrix(c("SeeIntrChart",MaxTripsTarget,"SeeIntrChart","SeeIntrChart"),nrow=1)
+G5 <- matrix(c(NumOfTPsSendOnMeritTrips,TargetNumOfInstructorsToSendOnMeritTrips,MDminusResult,MDpostiveResult),nrow=1)
+GoalChart <- rbind(G1,G2,G3,G4,G5)
+colnames(GoalChart)<-list("GoalResult","Target","MinusDev","PosDev")
+rownames(GoalChart)<-list("Budget","TDYs4ActiveInstructors","MinTripsGoal","MaxTripsGoal", "GloryTrips")
+
+#Weights Data
+WeightsByGoal <- t(Weights)
+colnames(WeightsByGoal)<-list("Goal1","Goal2","Goal3","Goal4", "Goal5")
+rownames(WeightsByGoal)<-list("Weights")
+
+#display the formated results
+print(paste0("Objective value= ", objective_value(result)))
+
+pander(WeightsByGoal,
+       caption="WeightsSummary")
+
+pander(GoalChart,
+       caption="GoalSummary")
+
+pander(TripSummaryChart ,
+       caption="TripSummary")
+
+pander(InstructorChart,
+       caption="InstructorSummary")
+```
+
+
+
+
+
+
+
+
+
